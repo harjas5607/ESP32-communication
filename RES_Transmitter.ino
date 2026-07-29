@@ -8,16 +8,14 @@ typedef struct
 
 Message msg;
 
-uint8_t receiverMAC[] = {0x38,0x18,0x2B,0xB2,0xB2,0x94};
+uint8_t receiverMAC[] = {0x38, 0x18, 0x2B, 0xB2, 0xB2, 0x94};   // Receiver MAC
+
+unsigned long lastSendTime = 0;
+unsigned long lastSerialPrint = 0;
 
 void OnDataSent(const wifi_tx_info_t *info, esp_now_send_status_t status)
 {
-  Serial.print("Send Status : ");
-
-  if(status == ESP_NOW_SEND_SUCCESS)
-    Serial.println("Success");
-  else
-    Serial.println("Failed");
+  // Optional callback
 }
 
 void setup()
@@ -28,7 +26,7 @@ void setup()
 
   if (esp_now_init() != ESP_OK)
   {
-    Serial.println("ESPNow Init Failed");
+    Serial.println("ESP-NOW Init Failed");
     return;
   }
 
@@ -37,7 +35,6 @@ void setup()
   esp_now_peer_info_t peerInfo = {};
 
   memcpy(peerInfo.peer_addr, receiverMAC, 6);
-
   peerInfo.channel = 0;
   peerInfo.encrypt = false;
 
@@ -47,27 +44,39 @@ void setup()
     return;
   }
 
+  msg.flag = 0;
+
   Serial.println("Transmitter Ready");
 }
 
 void loop()
 {
+  // Change flag using Serial Monitor
   if (Serial.available())
   {
     char c = Serial.read();
 
     if (c == '1')
       msg.flag = 1;
+
     else if (c == '0')
       msg.flag = 0;
-    else
-      return;   // Ignore any other character
+  }
+
+  // Send every 50 ms
+  if (millis() - lastSendTime >= 50)
+  {
+    lastSendTime = millis();
 
     esp_now_send(receiverMAC, (uint8_t *)&msg, sizeof(msg));
+  }
 
-    Serial.print("Sent Flag : ");
+  // Print every second
+  if (millis() - lastSerialPrint >= 1000)
+  {
+    lastSerialPrint = millis();
+
+    Serial.print("Sending Flag : ");
     Serial.println(msg.flag);
-
-    delay(1000);   // Wait 1 second before allowing another transmission
   }
 }
