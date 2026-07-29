@@ -10,13 +10,14 @@ typedef struct
 
 Message incomingData;
 
-volatile uint8_t currentFlag = 0;
+volatile uint8_t currentFlag = 1;   // Fail-safe default
 
 unsigned long lastPacketTime = 0;
 
-const unsigned long timeout = 100;     // communication timeout (ms)
+const unsigned long timeout = 200;   // ms
 
 unsigned long lastUARTSend = 0;
+unsigned long lastSerialPrint = 0;
 
 void OnDataRecv(const esp_now_recv_info_t *recv_info,
                 const uint8_t *incomingDataBuffer,
@@ -27,22 +28,22 @@ void OnDataRecv(const esp_now_recv_info_t *recv_info,
   currentFlag = incomingData.flag;
 
   lastPacketTime = millis();
-
-  Serial.print("Received Flag : ");
-  Serial.println(currentFlag);
 }
 
 void setup()
 {
   Serial.begin(115200);
 
+  // UART2
+  // RX = GPIO16
+  // TX = GPIO17
   UART_Device.begin(115200, SERIAL_8N1, 16, 17);
 
   WiFi.mode(WIFI_STA);
 
   if (esp_now_init() != ESP_OK)
   {
-    Serial.println("ESPNow Init Failed");
+    Serial.println("ESP-NOW Init Failed");
     return;
   }
 
@@ -53,22 +54,31 @@ void setup()
 
 void loop()
 {
-  // If communication lost
-
-  if ((millis() - lastPacketTime) > timeout)
+  // Communication lost
+  if (millis() - lastPacketTime > timeout)
   {
-    currentFlag = 0;
+    currentFlag = 1;
   }
 
-  // UART every 10 ms
-
+  // Send UART every 10 ms
   if (millis() - lastUARTSend >= 10)
   {
     lastUARTSend = millis();
 
     UART_Device.write(currentFlag);
+  }
 
-    Serial.print("UART Sent : ");
+  // Print once every second
+  if (millis() - lastSerialPrint >= 1000)
+  {
+    lastSerialPrint = millis();
+
+    Serial.print("Current Flag : ");
     Serial.println(currentFlag);
+
+    if (currentFlag == 1 && (millis() - lastPacketTime > timeout))
+      Serial.println("Status : Communication Lost");
+    else
+      Serial.println("Status : Communication OK");
   }
 }
